@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm --version)",
+      "Bash(npx vitest *)",
+      "Bash(npx tsc *)",
+      "Bash(curl -s -o /tmp/brosplit_login.html -w \"HTTP %{http_code}  size: %{size_download}b\\\\n\" http://localhost:3000/login)",
+      "Read(//tmp/**)",
+      "Bash(npm ls *)",
+      "Bash(npm uninstall *)",
+      "Bash(npm start *)",
+      "Bash(curl -s -o /dev/null -w \"Cold /login:  %{http_code}  %{time_total}s  size %{size_download}\\\\n\" http://localhost:3000/login)",
+      "Bash(curl -s -o /dev/null -w \"Warm /login:  %{http_code}  %{time_total}s  size %{size_download}\\\\n\" http://localhost:3000/login)",
+      "Bash(git --version)",
+      "Bash(git init *)",
+      "Bash(git check-ignore *)",
+      "Bash(git add *)"
+    ]
+  }
+}
