@@ -7,8 +7,6 @@ import { fetchUserGroups, fetchUserBalances } from "@/lib/queries";
 import { totalsLent, totalsOwed } from "@/lib/algos/netBalance";
 import { formatTotals, symbolOf } from "@/lib/currency";
 
-export const dynamic = "force-dynamic";
-
 export default async function HomePage() {
   const [{ groups }, { rows, userId }] = await Promise.all([
     fetchUserGroups(),

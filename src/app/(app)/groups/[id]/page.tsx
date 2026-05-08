@@ -9,8 +9,6 @@ import { createClient } from "@/lib/supabase/server";
 import type { ExpenseRow, RepaymentRow } from "@/types/database";
 import { initials } from "@/lib/utils";
 
-export const dynamic = "force-dynamic";
-
 interface PageProps {
   params: Promise<{ id: string }>;
 }

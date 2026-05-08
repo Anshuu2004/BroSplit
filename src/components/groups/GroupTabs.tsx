@@ -1,6 +1,7 @@
 "use client";
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useGroupRealtime } from "@/hooks/useGroupRealtime";
 import { BalancesTab } from "./BalancesTab";
 import { ExpensesTab } from "./ExpensesTab";
 import { HistoryTab } from "./HistoryTab";
@@ -23,6 +24,7 @@ export function GroupTabs(props: {
   history: RepaymentRow[];
   profileMap: Array<[string, UserRow]>;
 }) {
+  useGroupRealtime(props.groupId);
   const profileById = new Map(props.profileMap);
 
   return (

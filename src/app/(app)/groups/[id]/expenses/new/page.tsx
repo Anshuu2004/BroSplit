@@ -2,8 +2,6 @@ import { notFound } from "next/navigation";
 import { AddExpenseForm } from "@/components/expenses/AddExpenseForm";
 import { fetchGroupDetail } from "@/lib/queries";
 
-export const dynamic = "force-dynamic";
-
 interface PageProps {
   params: Promise<{ id: string }>;
 }

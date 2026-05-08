@@ -9,8 +9,6 @@ import type { GroupBalanceRow, GroupRow, UserRow } from "@/types/database";
 import { simplifyDebts } from "@/lib/algos/simplifyDebts";
 import { balancesByCurrency } from "@/lib/algos/netBalance";
 
-export const dynamic = "force-dynamic";
-
 export default async function ProfilePage() {
   const user = await getCachedUser();
   if (!user) return null;

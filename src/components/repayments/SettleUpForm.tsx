@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
@@ -62,7 +62,11 @@ export function SettleUpForm({ groupId, me, balances, profileMap }: Props) {
   }, [balances, groupId, me, profileById]);
 
   const [rows, setRows] = useState<Row[]>(initialRows);
-  const [submitting, setSubmitting] = useState(false);
+  const [pending, startTransition] = useTransition();
+
+  useEffect(() => {
+    router.prefetch(`/groups/${groupId}`);
+  }, [router, groupId]);
 
   if (rows.length === 0) {
     return (
@@ -77,7 +81,7 @@ export function SettleUpForm({ groupId, me, balances, profileMap }: Props) {
     setRows((prev) => prev.map((r) => (r.key === key ? { ...r, ...patch } : r)));
   }
 
-  async function submit() {
+  function submit() {
     const items = rows
       .filter((r) => r.selected)
       .map((r) => ({
@@ -101,28 +105,26 @@ export function SettleUpForm({ groupId, me, balances, profileMap }: Props) {
       }
     }
 
-    setSubmitting(true);
     const idempotencyKey = crypto.randomUUID();
-    const result = await requestRepaymentsAction({
-      group_id: groupId,
-      items,
-      idempotency_key: idempotencyKey,
-    });
-    if (!result.ok) {
-      toast({
-        title: "Couldn't send request",
-        description: result.message,
-        variant: "destructive",
-      });
-      setSubmitting(false);
-      return;
-    }
+    router.replace(`/groups/${groupId}`);
     toast({
       title: "Repayment requested",
       description: "Waiting for the lender to confirm.",
     });
-    router.replace(`/groups/${groupId}`);
-    router.refresh();
+    startTransition(async () => {
+      const result = await requestRepaymentsAction({
+        group_id: groupId,
+        items,
+        idempotency_key: idempotencyKey,
+      });
+      if (!result.ok) {
+        toast({
+          title: "Couldn't send request",
+          description: result.message,
+          variant: "destructive",
+        });
+      }
+    });
   }
 
   return (
@@ -204,9 +206,9 @@ export function SettleUpForm({ groupId, me, balances, profileMap }: Props) {
         size="lg"
         className="w-full"
         onClick={submit}
-        disabled={submitting}
+        disabled={pending}
       >
-        {submitting ? "Sending…" : "Send request(s)"}
+        {pending ? "Sending…" : "Send request(s)"}
       </Button>
     </div>
   );

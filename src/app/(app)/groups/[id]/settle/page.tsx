@@ -2,8 +2,6 @@ import { notFound } from "next/navigation";
 import { SettleUpForm } from "@/components/repayments/SettleUpForm";
 import { fetchGroupDetail } from "@/lib/queries";
 
-export const dynamic = "force-dynamic";
-
 interface PageProps {
   params: Promise<{ id: string }>;
 }

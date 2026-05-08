@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useTransition, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
@@ -45,8 +45,12 @@ export function AddExpenseForm({ groupId, primaryCurrency, me, members }: Props)
   const [participants, setParticipants] = useState<Set<string>>(
     () => new Set(members.map((m) => m.id))
   );
-  const [submitting, setSubmitting] = useState(false);
+  const [pending, startTransition] = useTransition();
   const [errors, setErrors] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    router.prefetch(`/groups/${groupId}`);
+  }, [router, groupId]);
 
   const amountOk = /^\d+$/.test(amount) && Number(amount) > 0;
   const nameOk = name.trim().length > 0 && name.trim().length <= 100;
@@ -83,7 +87,7 @@ export function AddExpenseForm({ groupId, primaryCurrency, me, members }: Props)
     if (Object.keys(e).length === 0) setStep(2);
   }
 
-  async function submit() {
+  function submit() {
     if (participants.size === 0) {
       toast({
         title: "Pick at least one participant",
@@ -91,27 +95,28 @@ export function AddExpenseForm({ groupId, primaryCurrency, me, members }: Props)
       });
       return;
     }
-    setSubmitting(true);
-    const result = await createExpenseAction({
-      group_id: groupId,
-      name: name.trim(),
-      amount,
-      currency,
-      paid_by: paidBy,
-      participants: Array.from(participants),
-    });
-    if (!result.ok) {
-      toast({
-        title: "Couldn't add expense",
-        description: result.message,
-        variant: "destructive",
-      });
-      setSubmitting(false);
-      return;
-    }
-    toast({ title: "Expense added" });
+    // Navigate first so the user lands back on the group page immediately;
+    // the server action runs in the background and the realtime subscription
+    // (or revalidatePath) reconciles the new expense into the list.
     router.replace(`/groups/${groupId}`);
-    router.refresh();
+    toast({ title: "Adding expense…" });
+    startTransition(async () => {
+      const result = await createExpenseAction({
+        group_id: groupId,
+        name: name.trim(),
+        amount,
+        currency,
+        paid_by: paidBy,
+        participants: Array.from(participants),
+      });
+      if (!result.ok) {
+        toast({
+          title: "Couldn't add expense",
+          description: result.message,
+          variant: "destructive",
+        });
+      }
+    });
   }
 
   if (step === 1) {
@@ -278,9 +283,9 @@ export function AddExpenseForm({ groupId, primaryCurrency, me, members }: Props)
         size="lg"
         className="w-full"
         onClick={submit}
-        disabled={submitting || participants.size === 0}
+        disabled={pending || participants.size === 0}
       >
-        {submitting ? "Splitting…" : "Split"}
+        {pending ? "Splitting…" : "Split"}
       </Button>
     </div>
   );

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useOptimistic, useTransition } from "react";
 import { Check, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -74,7 +74,11 @@ export function NotificationItem({ notif, profileMap, pendingRepayment }: Props)
   const router = useRouter();
   const { toast } = useToast();
   const profileById = new Map(profileMap);
-  const [busy, setBusy] = useState(false);
+  const [, startTransition] = useTransition();
+  const [optimisticResolved, resolveOptimistically] = useOptimistic(
+    false,
+    () => true
+  );
 
   const p = payload<{ group_id?: string; repayment_id?: string }>(notif);
   const target = p.group_id ? `/groups/${p.group_id}` : "/";
@@ -85,43 +89,48 @@ export function NotificationItem({ notif, profileMap, pendingRepayment }: Props)
     router.refresh();
   }
 
-  async function accept() {
+  function accept() {
     if (!p.repayment_id) return;
-    setBusy(true);
-    const result = await acceptRepaymentAction(p.repayment_id);
-    if (!result.ok) {
-      toast({
-        title: "Couldn't accept",
-        description: result.message,
-        variant: "destructive",
-      });
-    } else {
+    const repaymentId = p.repayment_id;
+    startTransition(async () => {
+      resolveOptimistically(true);
+      const result = await acceptRepaymentAction(repaymentId);
+      if (!result.ok) {
+        toast({
+          title: "Couldn't accept",
+          description: result.message,
+          variant: "destructive",
+        });
+        return;
+      }
       toast({ title: "Accepted" });
       await markNotificationReadAction(notif.id);
-    }
-    setBusy(false);
-    router.refresh();
+      router.refresh();
+    });
   }
 
-  async function reject() {
+  function reject() {
     if (!p.repayment_id) return;
-    setBusy(true);
-    const result = await rejectRepaymentAction(p.repayment_id);
-    if (!result.ok) {
-      toast({
-        title: "Couldn't reject",
-        description: result.message,
-        variant: "destructive",
-      });
-    } else {
+    const repaymentId = p.repayment_id;
+    startTransition(async () => {
+      resolveOptimistically(true);
+      const result = await rejectRepaymentAction(repaymentId);
+      if (!result.ok) {
+        toast({
+          title: "Couldn't reject",
+          description: result.message,
+          variant: "destructive",
+        });
+        return;
+      }
       toast({ title: "Rejected" });
       await markNotificationReadAction(notif.id);
-    }
-    setBusy(false);
-    router.refresh();
+      router.refresh();
+    });
   }
 
   const showActions =
+    !optimisticResolved &&
     notif.type === "REPAYMENT_REQUEST" &&
     pendingRepayment &&
     pendingRepayment.status === "PENDING";
@@ -142,10 +151,10 @@ export function NotificationItem({ notif, profileMap, pendingRepayment }: Props)
 
       {showActions ? (
         <div className="mt-3 flex gap-2">
-          <Button size="sm" onClick={accept} disabled={busy}>
+          <Button size="sm" onClick={accept}>
             <Check className="mr-1 h-4 w-4" /> Accept
           </Button>
-          <Button size="sm" variant="outline" onClick={reject} disabled={busy}>
+          <Button size="sm" variant="outline" onClick={reject}>
             <X className="mr-1 h-4 w-4" /> Reject
           </Button>
         </div>
