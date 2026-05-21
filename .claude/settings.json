@@ -14,7 +14,23 @@
       "Bash(git --version)",
       "Bash(git init *)",
       "Bash(git check-ignore *)",
-      "Bash(git add *)"
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(curl -s -o /dev/null -w \"Login page:    HTTP %{http_code}   %{time_total}s\\\\nRoot redirect: HTTP %{http_code}   %{time_total}s\\\\n\" https://bro-split-two.vercel.app/login)",
+      "Bash(curl -s -o /dev/null -w \"\" -w \"\" https://bro-split-two.vercel.app/login)",
+      "Bash(curl -s -I -o /dev/null -w \"%{http_code} %{redirect_url}\\\\n\" https://bro-split-two.vercel.app/)",
+      "Bash(curl -s -o /dev/null -w \"Warm /login:    %{time_total}s\\\\n\" https://bro-split-two.vercel.app/login)",
+      "Bash(curl -s -o /dev/null -w \"Warm /signup:   %{time_total}s\\\\n\" https://bro-split-two.vercel.app/signup)",
+      "Bash(Get-ChildItem -Path \"c:\\\\Users\\\\abhis\\\\Desktop\\\\BroSplit\" -Recurse -Filter \"*.ts\" -o ErrorAction SilentlyContinue)",
+      "Bash(Select-Object -First 20)",
+      "Bash(git stash *)",
+      "Bash(npm test *)",
+      "Bash(npx supabase *)",
+      "Bash(node -e \"try{const e=require\\('fs'\\).readFileSync\\('.env.local','utf8'\\);console.log\\(e.replace\\(/=.+/g,'=<redacted>'\\)\\)}catch{console.log\\('.env.local missing'\\)}\")",
+      "Bash(node -e \"const url=require\\('fs'\\).readFileSync\\('.env.local','utf8'\\).match\\(/NEXT_PUBLIC_SUPABASE_URL=\\(.+\\)/\\)[1].trim\\(\\);const ref=url.match\\(/https:\\\\/\\\\/\\([a-z0-9]+\\)\\\\.supabase\\\\.co/\\)?.[1];console.log\\('Project ref:',ref\\);console.log\\('Dashboard URL: https://supabase.com/dashboard/project/'+ref\\)\")",
+      "Bash(node -e ' *)",
+      "Bash(node -e \"console.log\\('supabase-js:', require\\('./node_modules/@supabase/supabase-js/package.json'\\).version\\); console.log\\('supabase/ssr:', require\\('./node_modules/@supabase/ssr/package.json'\\).version\\)\")",
+      "Bash(node -e \"console.log\\('Vercel CLI test:'\\); console.log\\(require\\('child_process'\\).execSync\\('npx vercel --version 2>&1'\\).toString\\(\\)\\)\")"
     ]
   }
 }

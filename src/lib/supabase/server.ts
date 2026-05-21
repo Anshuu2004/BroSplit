@@ -1,12 +1,17 @@
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { cache } from "react";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
 
-export async function createClient() {
+export async function createClient(): Promise<SupabaseClient<Database>> {
   const cookieStore = await cookies();
 
-  return createServerClient<Database>(
+  // The <Database> generic on createServerClient does not wire through to the
+  // returned client in the installed @supabase/ssr × supabase-js pair (the
+  // generic parameter order on SupabaseClient changed in supabase-js).
+  // Cast the return so .from()/.rpc() pick up our schema.
+  const client = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
@@ -26,23 +31,21 @@ export async function createClient() {
       },
     }
   );
+  return client as unknown as SupabaseClient<Database>;
 }
 
 /**
  * Per-request cached current user.
  *
- * Reads the session from cookies (no network call). The middleware uses the
- * stricter `getUser()` for security and refreshes the session — by the time we
- * reach a page or action, the cookie has already been validated for the
- * current request. This call is just to identify *who* the user is.
- *
- * Saves ~150 ms vs. `getUser()` because it doesn't hit the Supabase Auth API.
+ * The middleware revalidates the session with `getUser()` before any route
+ * handler runs, so by the time we reach a page or action the cookie is
+ * trustworthy. We still go through `getUser()` here — `cache()` collapses
+ * concurrent reads to a single Auth round-trip per request.
  */
 export const getCachedUser = cache(async () => {
   const supabase = await createClient();
   const {
-    data: { session },
-  } = await supabase.auth.getSession();
-  if (!session?.user) return null;
-  return session.user;
+    data: { user },
+  } = await supabase.auth.getUser();
+  return user ?? null;
 });

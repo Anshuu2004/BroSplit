@@ -106,11 +106,6 @@ export function SettleUpForm({ groupId, me, balances, profileMap }: Props) {
     }
 
     const idempotencyKey = crypto.randomUUID();
-    router.replace(`/groups/${groupId}`);
-    toast({
-      title: "Repayment requested",
-      description: "Waiting for the lender to confirm.",
-    });
     startTransition(async () => {
       const result = await requestRepaymentsAction({
         group_id: groupId,
@@ -123,7 +118,14 @@ export function SettleUpForm({ groupId, me, balances, profileMap }: Props) {
           description: result.message,
           variant: "destructive",
         });
+        return;
       }
+      toast({
+        title: "Repayment requested",
+        description: "Waiting for the lender to confirm.",
+      });
+      router.replace(`/groups/${groupId}`);
+      router.refresh();
     });
   }
 

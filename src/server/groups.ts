@@ -1,9 +1,14 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { createClient } from "@/lib/supabase/server";
 import { generateInviteToken } from "@/lib/utils";
-import { createGroupSchema } from "@/lib/validators";
+import {
+  createGroupSchema,
+  groupIdSchema,
+  memberRefSchema,
+} from "@/lib/validators";
+import { z } from "zod";
 import { getAuthedUser } from "./auth";
 
 type Result<T = unknown> =
@@ -11,7 +16,9 @@ type Result<T = unknown> =
   | { ok: false; message: string };
 
 /* -------------------------------------------------------------------------- */
-/* createGroup                                                                */
+/* createGroupAction                                                          */
+/* RLS allows: anyone may create a group where created_by = auth.uid().       */
+/* We then add the creator as admin via the same authenticated session.       */
 /* -------------------------------------------------------------------------- */
 
 export async function createGroupAction(
@@ -27,8 +34,8 @@ export async function createGroupAction(
   const user = await getAuthedUser();
   if (!user) return { ok: false, message: "Not signed in" };
 
-  const admin = createAdminClient();
-  const { data: group, error } = await admin
+  const supabase = await createClient();
+  const { data: group, error } = await supabase
     .from("groups")
     .insert({
       name: parsed.data.name,
@@ -43,7 +50,7 @@ export async function createGroupAction(
       message: error?.message ?? "Couldn't create the group.",
     };
   }
-  const { error: memberErr } = await admin
+  const { error: memberErr } = await supabase
     .from("group_members")
     .insert({ group_id: group.id, user_id: user.id, role: "admin" });
   if (memberErr) {
@@ -57,101 +64,83 @@ export async function createGroupAction(
 }
 
 /* -------------------------------------------------------------------------- */
-/* Authorization helpers                                                      */
-/* -------------------------------------------------------------------------- */
-
-async function isAdmin(groupId: string, userId: string): Promise<boolean> {
-  const admin = createAdminClient();
-  const { data } = await admin
-    .from("group_members")
-    .select("role")
-    .eq("group_id", groupId)
-    .eq("user_id", userId)
-    .is("removed_at", null)
-    .maybeSingle();
-  return data?.role === "admin";
-}
-
-async function isMember(groupId: string, userId: string): Promise<boolean> {
-  const admin = createAdminClient();
-  const { data } = await admin
-    .from("group_members")
-    .select("user_id")
-    .eq("group_id", groupId)
-    .eq("user_id", userId)
-    .is("removed_at", null)
-    .maybeSingle();
-  return !!data;
-}
-
-/* -------------------------------------------------------------------------- */
-/* generateInvite                                                             */
+/* generateInviteAction — admin-only by RLS (inv_admin_all).                  */
 /* -------------------------------------------------------------------------- */
 
 export async function generateInviteAction(
   groupId: string
 ): Promise<Result<{ token: string; expires_at: string }>> {
+  const parsed = groupIdSchema.safeParse({ group_id: groupId });
+  if (!parsed.success) return { ok: false, message: "Invalid group id" };
+
   const user = await getAuthedUser();
   if (!user) return { ok: false, message: "Not signed in" };
-  if (!(await isAdmin(groupId, user.id))) {
-    return { ok: false, message: "Only the group admin can create invites" };
-  }
 
   const token = generateInviteToken();
   const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
 
-  const admin = createAdminClient();
-  const { error } = await admin.from("invite_links").insert({
+  const supabase = await createClient();
+  const { error } = await supabase.from("invite_links").insert({
     token,
-    group_id: groupId,
+    group_id: parsed.data.group_id,
     created_by: user.id,
     expires_at: expiresAt,
   });
-  if (error) return { ok: false, message: error.message };
+  if (error) {
+    // RLS will reject if the caller is not an admin — surface that cleanly.
+    return { ok: false, message: error.message };
+  }
   return { ok: true, data: { token, expires_at: expiresAt } };
 }
 
 /* -------------------------------------------------------------------------- */
-/* deleteGroup                                                                */
+/* deleteGroupAction — admin-only update; RLS gates.                          */
 /* -------------------------------------------------------------------------- */
 
 export async function deleteGroupAction(groupId: string): Promise<Result> {
+  const parsed = groupIdSchema.safeParse({ group_id: groupId });
+  if (!parsed.success) return { ok: false, message: "Invalid group id" };
+
   const user = await getAuthedUser();
   if (!user) return { ok: false, message: "Not signed in" };
-  if (!(await isAdmin(groupId, user.id))) {
-    return { ok: false, message: "Only the group admin can delete the group" };
-  }
-  const admin = createAdminClient();
-  const { error } = await admin
+
+  const supabase = await createClient();
+  const { error, data } = await supabase
     .from("groups")
     .update({ deleted_at: new Date().toISOString() })
-    .eq("id", groupId);
+    .eq("id", parsed.data.group_id)
+    .select("id");
   if (error) return { ok: false, message: error.message };
+  if (!data || data.length === 0) {
+    return { ok: false, message: "Only the group admin can delete the group" };
+  }
   revalidatePath("/");
-  revalidatePath(`/groups/${groupId}`);
+  revalidatePath(`/groups/${parsed.data.group_id}`);
   return { ok: true, data: null };
 }
 
 /* -------------------------------------------------------------------------- */
-/* getMemberBalanceSummary                                                    */
+/* getMemberBalanceSummaryAction — uses the RPC; RLS gates membership.        */
 /* -------------------------------------------------------------------------- */
 
 export async function getMemberBalanceSummaryAction(
   groupId: string,
   memberId: string
 ): Promise<Result<{ currency: string; net_balance: number }[]>> {
+  const parsed = memberRefSchema.safeParse({
+    group_id: groupId,
+    user_id: memberId,
+  });
+  if (!parsed.success) return { ok: false, message: "Invalid input" };
+
   const user = await getAuthedUser();
   if (!user) return { ok: false, message: "Not signed in" };
-  if (!(await isAdmin(groupId, user.id))) {
-    return { ok: false, message: "Only the group admin can view this" };
-  }
-  const admin = createAdminClient();
-  const { data, error } = await admin
-    .from("group_balances")
-    .select("currency, net_balance")
-    .eq("group_id", groupId)
-    .eq("user_id", memberId)
-    .neq("net_balance", 0);
+
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("get_member_balance_summary", {
+    p_group_id: parsed.data.group_id,
+    p_user_id: parsed.data.user_id,
+  });
   if (error) return { ok: false, message: error.message };
   return {
     ok: true,
@@ -160,116 +149,80 @@ export async function getMemberBalanceSummaryAction(
 }
 
 /* -------------------------------------------------------------------------- */
-/* removeMember                                                               */
+/* removeMemberAction — admin removes someone else, via the RPC.              */
 /* -------------------------------------------------------------------------- */
 
 export async function removeMemberAction(
   groupId: string,
   memberId: string
 ): Promise<Result> {
+  const parsed = memberRefSchema.safeParse({
+    group_id: groupId,
+    user_id: memberId,
+  });
+  if (!parsed.success) return { ok: false, message: "Invalid input" };
+
   const user = await getAuthedUser();
   if (!user) return { ok: false, message: "Not signed in" };
-  if (!(await isAdmin(groupId, user.id))) {
-    return { ok: false, message: "Only the group admin can remove members" };
-  }
-  if (memberId === user.id) {
-    return {
-      ok: false,
-      message: "Admin cannot remove self. Delete the group instead.",
-    };
-  }
 
-  const admin = createAdminClient();
-
-  const { error: rmErr } = await admin
-    .from("group_members")
-    .update({ removed_at: new Date().toISOString() })
-    .eq("group_id", groupId)
-    .eq("user_id", memberId)
-    .is("removed_at", null);
-  if (rmErr) return { ok: false, message: rmErr.message };
-
-  // Cancel pending repayments involving this member in this group.
-  await admin
-    .from("repayments")
-    .update({ status: "CANCELLED" })
-    .eq("group_id", groupId)
-    .eq("status", "PENDING")
-    .or(`debtor_id.eq.${memberId},creditor_id.eq.${memberId}`);
-
-  // Notify the removed member.
-  await admin.from("notifications").insert({
-    user_id: memberId,
-    type: "GROUP_REMOVED",
-    payload: { group_id: groupId, actor_id: user.id },
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("remove_member", {
+    p_group_id: parsed.data.group_id,
+    p_user_id: parsed.data.user_id,
   });
+  if (error) return { ok: false, message: error.message };
 
-  revalidatePath(`/groups/${groupId}`);
-  revalidatePath(`/groups/${groupId}/settings`);
+  revalidatePath(`/groups/${parsed.data.group_id}`);
+  revalidatePath(`/groups/${parsed.data.group_id}/settings`);
   return { ok: true, data: null };
 }
 
 /* -------------------------------------------------------------------------- */
-/* joinGroupByToken (used by /join/[token] page)                              */
+/* leaveGroupAction — caller removes themselves via the leave_group RPC.      */
+/* The RPC refuses if the caller is the sole admin.                           */
 /* -------------------------------------------------------------------------- */
+
+export async function leaveGroupAction(groupId: string): Promise<Result> {
+  const parsed = groupIdSchema.safeParse({ group_id: groupId });
+  if (!parsed.success) return { ok: false, message: "Invalid group id" };
+
+  const user = await getAuthedUser();
+  if (!user) return { ok: false, message: "Not signed in" };
+
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("leave_group", {
+    p_group_id: parsed.data.group_id,
+  });
+  if (error) return { ok: false, message: error.message };
+
+  revalidatePath("/");
+  return { ok: true, data: null };
+}
+
+/* -------------------------------------------------------------------------- */
+/* joinByTokenAction — wraps the consume_invite RPC (which fans out notifs).  */
+/* -------------------------------------------------------------------------- */
+
+const joinTokenSchema = z.object({ token: z.string().min(1).max(64) });
 
 export async function joinByTokenAction(
   token: string
 ): Promise<Result<{ group_id: string }>> {
+  const parsed = joinTokenSchema.safeParse({ token });
+  if (!parsed.success) return { ok: false, message: "Invalid invite token" };
+
   const user = await getAuthedUser();
   if (!user) return { ok: false, message: "Not signed in" };
 
-  const admin = createAdminClient();
-  const { data: link, error } = await admin
-    .from("invite_links")
-    .select("group_id, expires_at, revoked")
-    .eq("token", token)
-    .maybeSingle();
-  if (error) return { ok: false, message: error.message };
-  if (!link) return { ok: false, message: "Invalid invite token" };
-  if (link.revoked) return { ok: false, message: "Invite link revoked" };
-  if (new Date(link.expires_at as string) < new Date()) {
-    return { ok: false, message: "Invite link expired" };
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("consume_invite", {
+    p_token: parsed.data.token,
+  });
+  if (error || !data) {
+    return { ok: false, message: error?.message ?? "Couldn't redeem invite" };
   }
 
-  // Upsert membership: if previously removed, restore; else insert.
-  const { error: upErr } = await admin.from("group_members").upsert(
-    {
-      group_id: link.group_id as string,
-      user_id: user.id,
-      role: "member",
-      joined_at: new Date().toISOString(),
-      removed_at: null,
-    },
-    { onConflict: "group_id,user_id" }
-  );
-  if (upErr) return { ok: false, message: upErr.message };
-
-  // Notify admins + the joiner.
-  const { data: admins } = await admin
-    .from("group_members")
-    .select("user_id")
-    .eq("group_id", link.group_id as string)
-    .eq("role", "admin")
-    .is("removed_at", null);
-
-  const notifs = [
-    ...(admins ?? [])
-      .filter((a) => a.user_id !== user.id)
-      .map((a) => ({
-        user_id: a.user_id as string,
-        type: "MEMBER_JOINED" as const,
-        payload: { group_id: link.group_id, actor_id: user.id },
-      })),
-    {
-      user_id: user.id,
-      type: "GROUP_JOINED" as const,
-      payload: { group_id: link.group_id },
-    },
-  ];
-  if (notifs.length > 0) await admin.from("notifications").insert(notifs);
-
   revalidatePath("/");
-  revalidatePath(`/groups/${link.group_id}`);
-  return { ok: true, data: { group_id: link.group_id as string } };
+  revalidatePath(`/groups/${data as string}`);
+  return { ok: true, data: { group_id: data as string } };
 }

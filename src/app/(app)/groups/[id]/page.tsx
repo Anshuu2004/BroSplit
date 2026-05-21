@@ -126,6 +126,7 @@ export default async function GroupDetailPage({ params }: PageProps) {
       <GroupTabs
         groupId={id}
         me={detail.me}
+        isAdmin={detail.isAdmin}
         balances={detail.balances}
         expenses={expenses}
         history={(history ?? []) as RepaymentRow[]}

@@ -5,18 +5,19 @@ import { createClient, getCachedUser } from "@/lib/supabase/server";
 import { totalsLent, totalsOwed } from "@/lib/algos/netBalance";
 import { formatAmount, formatTotals } from "@/lib/currency";
 import { initials } from "@/lib/utils";
-import type { GroupBalanceRow, GroupRow, UserRow } from "@/types/database";
-import { simplifyDebts } from "@/lib/algos/simplifyDebts";
-import { balancesByCurrency } from "@/lib/algos/netBalance";
+import type { GroupBalanceRow } from "@/types/database";
 
 export default async function ProfilePage() {
   const user = await getCachedUser();
   if (!user) return null;
   const supabase = await createClient();
 
-  // Parallel: profile + ALL balances of every group I'm in.
-  // We only need one pass over group_balances — RLS limits rows to my groups.
-  const [profileRes, balancesRes] = await Promise.all([
+  // Three independent reads in parallel:
+  //   - profile (name, email)
+  //   - just my own balance rows for the top-line totals (RLS narrows further to my groups)
+  //   - the drill-down (simplified open positions involving me) via RPC, so the
+  //     greedy debt-simplification runs in Postgres, not the request thread.
+  const [profileRes, myBalancesRes, positionsRes] = await Promise.all([
     supabase
       .from("users")
       .select(
@@ -24,83 +25,27 @@ export default async function ProfilePage() {
       )
       .eq("id", user.id)
       .maybeSingle(),
-    supabase.from("group_balances").select("*"),
+    supabase.from("group_balances").select("*").eq("user_id", user.id),
+    supabase.rpc("get_user_open_positions"),
   ]);
 
   const profile = profileRes.data;
-  const allRows = (balancesRes.data ?? []) as GroupBalanceRow[];
-
-  // My own per-currency totals — derived from rows where user_id === me.
-  const myRows = allRows.filter((r) => r.user_id === user.id);
+  const myRows = (myBalancesRes.data ?? []) as GroupBalanceRow[];
   const lent = totalsLent(myRows, user.id);
   const owed = totalsOwed(myRows, user.id);
 
-  const groupIds = Array.from(new Set(myRows.map((r) => r.group_id)));
-
-  const groupsRes =
-    groupIds.length > 0
-      ? await supabase.from("groups").select("id, name").in("id", groupIds)
-      : { data: [] as Pick<GroupRow, "id" | "name">[] };
-
-  const groupNameById = new Map<string, string>(
-    (groupsRes.data ?? []).map((g) => [g.id as string, g.name as string])
-  );
-
-  // Build drill-down: simplify per group/currency, keep transfers involving me.
-  const counterIds = new Set<string>();
-  const drilldown: {
+  const positions = (positionsRes.data ?? []) as {
+    group_id: string;
+    group_name: string;
+    currency: string;
     role: "lent" | "owed";
     counterparty: string;
-    groupId: string;
-    currency: string;
-    amount: bigint;
-  }[] = [];
+    counter_name: string;
+    amount: number;
+  }[];
 
-  for (const groupId of groupIds) {
-    const byCcy = balancesByCurrency(allRows, groupId);
-    for (const [ccy, map] of byCcy) {
-      const transfers = simplifyDebts(map);
-      for (const t of transfers) {
-        if (t.from === user.id) {
-          counterIds.add(t.to);
-          drilldown.push({
-            role: "owed",
-            counterparty: t.to,
-            groupId,
-            currency: ccy,
-            amount: t.amount,
-          });
-        } else if (t.to === user.id) {
-          counterIds.add(t.from);
-          drilldown.push({
-            role: "lent",
-            counterparty: t.from,
-            groupId,
-            currency: ccy,
-            amount: t.amount,
-          });
-        }
-      }
-    }
-  }
-
-  const counterUsersRes =
-    counterIds.size > 0
-      ? await supabase
-          .from("users")
-          .select("id, full_name")
-          .in("id", Array.from(counterIds))
-      : { data: [] as Pick<UserRow, "id" | "full_name">[] };
-
-  const counterNameById = new Map<string, string>(
-    (counterUsersRes.data ?? []).map((u) => [
-      u.id as string,
-      u.full_name as string,
-    ])
-  );
-
-  const lentRows = drilldown.filter((d) => d.role === "lent");
-  const owedRows = drilldown.filter((d) => d.role === "owed");
+  const lentRows = positions.filter((p) => p.role === "lent");
+  const owedRows = positions.filter((p) => p.role === "owed");
 
   return (
     <div className="space-y-5">
@@ -145,15 +90,15 @@ export default async function ProfilePage() {
           <ul className="space-y-2">
             {lentRows.map((d, idx) => (
               <li
-                key={`${idx}-${d.counterparty}-${d.groupId}-${d.currency}`}
+                key={`${idx}-${d.counterparty}-${d.group_id}-${d.currency}`}
                 className="flex items-center justify-between rounded-xl border bg-card p-3"
               >
                 <div className="min-w-0">
                   <p className="truncate text-sm font-medium">
-                    {counterNameById.get(d.counterparty) ?? "Unknown"}
+                    {d.counter_name ?? "Unknown"}
                   </p>
                   <p className="truncate text-xs text-muted-foreground">
-                    {groupNameById.get(d.groupId) ?? "Group"}
+                    {d.group_name}
                   </p>
                 </div>
                 <p className="text-sm font-semibold tabular-nums text-primary">
@@ -173,15 +118,15 @@ export default async function ProfilePage() {
           <ul className="space-y-2">
             {owedRows.map((d, idx) => (
               <li
-                key={`${idx}-${d.counterparty}-${d.groupId}-${d.currency}`}
+                key={`${idx}-${d.counterparty}-${d.group_id}-${d.currency}`}
                 className="flex items-center justify-between rounded-xl border bg-card p-3"
               >
                 <div className="min-w-0">
                   <p className="truncate text-sm font-medium">
-                    {counterNameById.get(d.counterparty) ?? "Unknown"}
+                    {d.counter_name ?? "Unknown"}
                   </p>
                   <p className="truncate text-xs text-muted-foreground">
-                    {groupNameById.get(d.groupId) ?? "Group"}
+                    {d.group_name}
                   </p>
                 </div>
                 <p className="text-sm font-semibold tabular-nums text-destructive">

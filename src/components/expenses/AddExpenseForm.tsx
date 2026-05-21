@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useTransition, useEffect } from "react";
+import { useState, useMemo, useTransition, useEffect, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
@@ -47,6 +47,13 @@ export function AddExpenseForm({ groupId, primaryCurrency, me, members }: Props)
   );
   const [pending, startTransition] = useTransition();
   const [errors, setErrors] = useState<Record<string, string>>({});
+
+  // Stable per-mount idempotency key — protects against double-submit and
+  // re-tries of the same form instance creating duplicate expenses.
+  const idempotencyKeyRef = useRef<string>("");
+  if (!idempotencyKeyRef.current) {
+    idempotencyKeyRef.current = crypto.randomUUID();
+  }
 
   useEffect(() => {
     router.prefetch(`/groups/${groupId}`);
@@ -95,11 +102,6 @@ export function AddExpenseForm({ groupId, primaryCurrency, me, members }: Props)
       });
       return;
     }
-    // Navigate first so the user lands back on the group page immediately;
-    // the server action runs in the background and the realtime subscription
-    // (or revalidatePath) reconciles the new expense into the list.
-    router.replace(`/groups/${groupId}`);
-    toast({ title: "Adding expense…" });
     startTransition(async () => {
       const result = await createExpenseAction({
         group_id: groupId,
@@ -108,6 +110,7 @@ export function AddExpenseForm({ groupId, primaryCurrency, me, members }: Props)
         currency,
         paid_by: paidBy,
         participants: Array.from(participants),
+        idempotency_key: idempotencyKeyRef.current,
       });
       if (!result.ok) {
         toast({
@@ -115,7 +118,10 @@ export function AddExpenseForm({ groupId, primaryCurrency, me, members }: Props)
           description: result.message,
           variant: "destructive",
         });
+        return;
       }
+      router.replace(`/groups/${groupId}`);
+      router.refresh();
     });
   }
 

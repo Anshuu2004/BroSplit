@@ -72,8 +72,26 @@ export const createExpenseSchema = z.object({
   participants: z
     .array(z.string().uuid())
     .min(1, "Pick at least one participant"),
+  idempotency_key: z.string().uuid(),
 });
 export type CreateExpenseInput = z.infer<typeof createExpenseSchema>;
+
+export const deleteExpenseSchema = z.object({
+  expense_id: z.string().uuid(),
+});
+
+export const groupIdSchema = z.object({
+  group_id: z.string().uuid(),
+});
+
+export const memberRefSchema = z.object({
+  group_id: z.string().uuid(),
+  user_id: z.string().uuid(),
+});
+
+export const repaymentIdSchema = z.object({
+  repayment_id: z.string().uuid(),
+});
 
 export const repaymentItemSchema = z.object({
   creditor_id: z.string().uuid(),

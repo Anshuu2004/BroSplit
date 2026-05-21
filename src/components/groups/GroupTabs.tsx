@@ -19,6 +19,7 @@ interface ExpenseWithSplit extends ExpenseRow {
 export function GroupTabs(props: {
   groupId: string;
   me: string;
+  isAdmin: boolean;
   balances: GroupBalanceRow[];
   expenses: ExpenseWithSplit[];
   history: RepaymentRow[];
@@ -46,6 +47,7 @@ export function GroupTabs(props: {
         <ExpensesTab
           groupId={props.groupId}
           me={props.me}
+          isAdmin={props.isAdmin}
           expenses={props.expenses}
           profileById={profileById}
         />

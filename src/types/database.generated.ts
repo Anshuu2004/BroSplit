@@ -7,30 +7,10 @@ export type Json =
   | Json[]
 
 export type Database = {
-  graphql_public: {
-    Tables: {
-      [_ in never]: never
-    }
-    Views: {
-      [_ in never]: never
-    }
-    Functions: {
-      graphql: {
-        Args: {
-          extensions?: Json
-          operationName?: string
-          query?: string
-          variables?: Json
-        }
-        Returns: Json
-      }
-    }
-    Enums: {
-      [_ in never]: never
-    }
-    CompositeTypes: {
-      [_ in never]: never
-    }
+  // Allows to automatically instantiate createClient with right options
+  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
+  __InternalSupabase: {
+    PostgrestVersion: "14.5"
   }
   public: {
     Tables: {
@@ -79,6 +59,7 @@ export type Database = {
           deleted_at: string | null
           group_id: string
           id: string
+          idempotency_key: string | null
           name: string
           paid_by: string
         }
@@ -90,6 +71,7 @@ export type Database = {
           deleted_at?: string | null
           group_id: string
           id?: string
+          idempotency_key?: string | null
           name: string
           paid_by: string
         }
@@ -101,6 +83,7 @@ export type Database = {
           deleted_at?: string | null
           group_id?: string
           id?: string
+          idempotency_key?: string | null
           name?: string
           paid_by?: string
         }
@@ -394,12 +377,14 @@ export type Database = {
           p_amount: number
           p_currency: string
           p_group_id: string
+          p_idempotency_key?: string
           p_name: string
           p_paid_by: string
           p_participants: string[]
         }
         Returns: string
       }
+      delete_expense: { Args: { p_expense_id: string }; Returns: undefined }
       get_member_balance_summary: {
         Args: { p_group_id: string; p_user_id: string }
         Returns: {
@@ -407,8 +392,21 @@ export type Database = {
           net_balance: number
         }[]
       }
+      get_user_open_positions: {
+        Args: never
+        Returns: {
+          amount: number
+          counter_name: string
+          counterparty: string
+          currency: string
+          group_id: string
+          group_name: string
+          role: string
+        }[]
+      }
       is_group_admin: { Args: { g: string }; Returns: boolean }
       is_group_member: { Args: { g: string }; Returns: boolean }
+      leave_group: { Args: { p_group_id: string }; Returns: undefined }
       reject_repayment: { Args: { p_id: string }; Returns: undefined }
       remove_member: {
         Args: { p_group_id: string; p_user_id: string }
@@ -560,9 +558,6 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
-  graphql_public: {
-    Enums: {},
-  },
   public: {
     Enums: {
       group_role: ["admin", "member"],

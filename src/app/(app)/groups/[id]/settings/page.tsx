@@ -6,6 +6,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { fetchGroupDetail } from "@/lib/queries";
 import { RemoveMemberButton } from "@/components/groups/RemoveMemberButton";
 import { DeleteGroupButton } from "@/components/groups/DeleteGroupButton";
+import { LeaveGroupButton } from "@/components/groups/LeaveGroupButton";
 import { initials } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
@@ -80,6 +81,23 @@ export default async function GroupSettingsPage({ params }: PageProps) {
                 );
               })}
             </ul>
+          </CardContent>
+        </Card>
+      </section>
+
+      <section aria-label="Membership" className="space-y-2">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+          Your membership
+        </h2>
+        <Card>
+          <CardContent className="space-y-3 p-4">
+            <p className="text-sm text-muted-foreground">
+              Leaving this group cancels any pending repayments involving you.
+              {detail.isAdmin
+                ? " As the admin, you can only leave if another admin remains."
+                : ""}
+            </p>
+            <LeaveGroupButton groupId={id} groupName={detail.group.name} />
           </CardContent>
         </Card>
       </section>

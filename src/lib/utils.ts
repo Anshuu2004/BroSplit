@@ -47,3 +47,17 @@ function base64UrlEncode(bytes: Uint8Array): string {
 export function uuid(): string {
   return crypto.randomUUID();
 }
+
+const MAX_SAFE = BigInt(Number.MAX_SAFE_INTEGER);
+
+/**
+ * Convert a BigInt money amount to a Number for the JSON wire. Throws if the
+ * value would lose precision. INR/USD amounts are nowhere near the limit, but
+ * this keeps the integer-only-money invariant honest.
+ */
+export function safeAmountNumber(b: bigint, label = "amount"): number {
+  if (b < 0n || b > MAX_SAFE) {
+    throw new Error(`${label} is out of safe range`);
+  }
+  return Number(b);
+}

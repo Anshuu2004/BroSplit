@@ -4,6 +4,7 @@ import Link from "next/link";
 import { Receipt } from "lucide-react";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { Button } from "@/components/ui/button";
+import { DeleteExpenseButton } from "@/components/expenses/DeleteExpenseButton";
 import { formatAmount } from "@/lib/currency";
 import { relativeTime } from "@/lib/utils";
 import type { ExpenseRow, UserRow } from "@/types/database";
@@ -15,11 +16,13 @@ interface ExpenseWithSplit extends ExpenseRow {
 export function ExpensesTab({
   groupId,
   me,
+  isAdmin,
   expenses,
   profileById,
 }: {
   groupId: string;
   me: string;
+  isAdmin: boolean;
   expenses: ExpenseWithSplit[];
   profileById: Map<string, UserRow>;
 }) {
@@ -44,6 +47,7 @@ export function ExpensesTab({
         const payer = profileById.get(e.paid_by);
         const isMyPayment = e.paid_by === me;
         const myShare = e.my_share ?? 0;
+        const canDelete = isAdmin || e.created_by === me;
 
         return (
           <li
@@ -62,20 +66,27 @@ export function ExpensesTab({
                   {relativeTime(e.created_at)}
                 </p>
               </div>
-              <div className="text-right">
-                {myShare > 0 ? (
-                  isMyPayment ? (
-                    <p className="text-xs font-semibold uppercase tracking-wide text-primary">
-                      lent {formatAmount(BigInt(e.amount) - BigInt(myShare), e.currency)}
-                    </p>
+              <div className="flex items-start gap-1">
+                <div className="text-right">
+                  {myShare > 0 ? (
+                    isMyPayment ? (
+                      <p className="text-xs font-semibold uppercase tracking-wide text-primary">
+                        lent {formatAmount(BigInt(e.amount) - BigInt(myShare), e.currency)}
+                      </p>
+                    ) : (
+                      <p className="text-xs font-semibold uppercase tracking-wide text-destructive">
+                        you owe {formatAmount(myShare, e.currency)}
+                      </p>
+                    )
                   ) : (
-                    <p className="text-xs font-semibold uppercase tracking-wide text-destructive">
-                      you owe {formatAmount(myShare, e.currency)}
-                    </p>
-                  )
-                ) : (
-                  <p className="text-xs text-muted-foreground">not in split</p>
-                )}
+                    <p className="text-xs text-muted-foreground">not in split</p>
+                  )}
+                </div>
+                <DeleteExpenseButton
+                  expenseId={e.id}
+                  expenseName={e.name}
+                  canDelete={canDelete}
+                />
               </div>
             </div>
           </li>

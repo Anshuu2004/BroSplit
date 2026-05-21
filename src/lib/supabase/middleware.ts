@@ -1,6 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import type { Database } from "@/types/database";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 const PUBLIC_ROUTES = [
   "/login",
@@ -12,7 +13,8 @@ const PUBLIC_ROUTES = [
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
 
-  const supabase = createServerClient<Database>(
+  // See lib/supabase/server.ts for the generic-mismatch background.
+  const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
@@ -31,12 +33,13 @@ export async function updateSession(request: NextRequest) {
         },
       },
     }
-  );
+  ) as unknown as SupabaseClient<Database>;
 
+  // Security-critical: getUser() revalidates the session with the Auth server.
+  // getSession() only parses the cookie locally and can be spoofed.
   const {
-    data: { session },
-  } = await supabase.auth.getSession();
-  const user = session?.user ?? null;
+    data: { user },
+  } = await supabase.auth.getUser();
 
   const path = request.nextUrl.pathname;
   const isPublic =
