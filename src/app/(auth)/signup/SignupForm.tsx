@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { signupSchema, type SignupInput } from "@/lib/validators";
 import { createClient } from "@/lib/supabase/client";
+import { OAuthButtons } from "@/components/auth/OAuthButtons";
 
 export default function SignupForm() {
   const search = useSearchParams();
@@ -89,6 +90,8 @@ export default function SignupForm() {
           Start splitting expenses with friends in seconds.
         </p>
       </div>
+
+      <OAuthButtons />
 
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-4" noValidate>
         <div className="space-y-1.5">
