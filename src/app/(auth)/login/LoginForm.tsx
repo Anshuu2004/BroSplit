@@ -178,7 +178,12 @@ export default function LoginForm() {
           </div>
         ) : null}
 
-        <Button type="submit" size="lg" className="w-full" disabled={submitting}>
+        <Button
+          type="submit"
+          size="lg"
+          className="w-full rounded-lg shadow-sm shadow-black/5"
+          disabled={submitting}
+        >
           {submitting ? "Logging in…" : "Log in"}
         </Button>
       </form>
