@@ -1,4 +1,22 @@
-# Brosplit
+<div align="center">
+
+# 💸 BroSplit — Mobile-First Expense Splitter
+
+![Next.js](https://img.shields.io/badge/Next.js%2015-000000?style=for-the-badge&logo=nextdotjs&logoColor=white)
+![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=for-the-badge&logo=typescript&logoColor=white)
+![Supabase](https://img.shields.io/badge/Supabase-3ECF8E?style=for-the-badge&logo=supabase&logoColor=white)
+![Tailwind](https://img.shields.io/badge/Tailwind-06B6D4?style=for-the-badge&logo=tailwindcss&logoColor=white)
+
+**Split expenses across groups and trips — multi-currency, exact to the rupee, with real authorization.**
+
+<!-- Hero image: add a screenshot of the group balances / add-expense screen, save it as docs/screenshot.png, then uncomment the next line: -->
+<!-- ![BroSplit screenshot](docs/screenshot.png) -->
+
+</div>
+
+> **Highlights** — multi-currency balances (never auto-converted) · greedy debt simplification · **integer-exact money math** · Postgres **Row-Level Security** as source of truth · unit-tested algorithms (Vitest)
+
+---
 
 Mobile-first expense splitter for friends, roommates, and trips. Built per the PRD in `compass_artifact_wf-c445d463-0d2c-4d2d-bd57-18752d542bd5_text_markdown.md`.
 
